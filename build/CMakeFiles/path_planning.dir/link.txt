@@ -1,0 +1,1 @@
+/usr/bin/x86_64-linux-gnu-g++-7  -g   CMakeFiles/path_planning.dir/src/main.cpp.o  -o path_planning -lz -lssl -luv -luWS 
