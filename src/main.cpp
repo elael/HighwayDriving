@@ -103,8 +103,8 @@ int main() {
           planner.keep_lane(main_car, previous_path, sensor_fusion);
 
 
-          msgJson["next_x"] = previous_path[0];
-          msgJson["next_y"] = previous_path[1];
+          msgJson["next_x"] = std::move(previous_path[0]);
+          msgJson["next_y"] = std::move(previous_path[1]);
 
           auto msg = "42[\"control\","+ msgJson.dump()+"]";
 

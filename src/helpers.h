@@ -40,6 +40,11 @@ constexpr double distance(const double& x1, const double& y1, const double& x2, 
   return sqrt((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1));
 }
 
+// Calculate distance between two points
+constexpr double sq_distance(const double& x1, const double& y1, const double& x2, const double& y2) {
+  return (x2-x1)*(x2-x1)+(y2-y1)*(y2-y1);
+}
+
 // Calculate closest waypoint to current x, y position
 static int ClosestWaypoint(double x, double y, const vector<double> &maps_x, 
                     const vector<double> &maps_y) {
@@ -131,8 +136,11 @@ inline FrenetFrame getFrenet(double x, double y, double theta,
   return {frenet_s,frenet_d};
 }
 
+struct XYFrame {
+  double x, y;
+};
 // Transform from Frenet s,d coordinates to Cartesian x,y
-inline vector<double> getXY(double s, double d, const vector<double> &maps_s, 
+inline XYFrame getXY(double s, double d, const vector<double> &maps_s, 
                      const vector<double> &maps_x, 
                      const vector<double> &maps_y) {
   int prev_wp = -1;
