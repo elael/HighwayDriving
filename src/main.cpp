@@ -100,7 +100,7 @@ int main() {
           //   next_x_vals.emplace_back(main_car.x+(dist_inc*i)*cos(deg2rad(main_car.yaw)));
           //   next_y_vals.emplace_back(main_car.y+(dist_inc*i)*sin(deg2rad(main_car.yaw)));
           // }
-          planner.keep_lane(main_car, previous_path, sensor_fusion);
+          planner.goto_lane(main_car, previous_path, sensor_fusion);
 
 
           msgJson["next_x"] = std::move(previous_path[0]);

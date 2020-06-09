@@ -5,6 +5,7 @@
 #include <string>
 #include <array>
 #include <vector>
+#include "Eigen/Dense"
 
 // for convenience
 using std::string;
@@ -140,7 +141,7 @@ struct XYFrame {
   double x, y;
 };
 // Transform from Frenet s,d coordinates to Cartesian x,y
-inline XYFrame getXY(double s, double d, const vector<double> &maps_s, 
+inline Eigen::Vector2d getXY(double s, double d, const vector<double> &maps_s, 
                      const vector<double> &maps_x, 
                      const vector<double> &maps_y) {
   int prev_wp = -1;
@@ -164,7 +165,9 @@ inline XYFrame getXY(double s, double d, const vector<double> &maps_s,
   double x = seg_x + d*cos(perp_heading);
   double y = seg_y + d*sin(perp_heading);
 
-  return {x,y};
+  Eigen::Vector2d xy;
+  xy << x, y;
+  return xy;
 }
 
 #endif  // HELPERS_H
