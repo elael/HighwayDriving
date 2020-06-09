@@ -105,8 +105,7 @@ void TrajectoryPlanners::goto_lane(const Car& car, array<vector<double>,2>& prev
         }
   }
 
-  constexpr double final_ds = 15;
-  const auto [last_s, last_d] = getFrenet(previous_path[0].back(), previous_path[1].back(), theta, map_x, map_y);
+  constexpr double final_ds = 12;
 
   Eigen::Vector2d initial; initial << previous_path[0].back(), previous_path[1].back();
   Eigen::Vector2d behind_initial; behind_initial << *(previous_path[0].rbegin()+1), *(previous_path[1].rbegin()+1);
@@ -115,6 +114,7 @@ void TrajectoryPlanners::goto_lane(const Car& car, array<vector<double>,2>& prev
   auto v_behind_initial = (behind2_initial-initial).normalized();
   auto a_initial = (v_initial - v_behind_initial)/kUpdatePeriod;
 
+  const auto [last_s, last_d] = getFrenet(previous_path[0].back(), previous_path[1].back(), theta, map_x, map_y);
   const auto behind = getXY(last_s + final_ds - 0.01, lane_center, map_s, map_x, map_y);
   const auto final = getXY(last_s + final_ds, lane_center, map_s, map_x, map_y);
   const auto ahead = getXY(last_s + final_ds + 0.01, lane_center, map_s, map_x, map_y);
@@ -135,10 +135,9 @@ void TrajectoryPlanners::goto_lane(const Car& car, array<vector<double>,2>& prev
   // If no car in front, use max jerk
   double target_speed;
   if(next_car_distance < 30){
-    lane_center = 2;
+    lane_center = (static_cast<int>(lane_center)+4)%12;
     target_speed = sqrt((*closest_car_pt)[3]*(*closest_car_pt)[3] + (*closest_car_pt)[4]*(*closest_car_pt)[4]);
     target_speed /= 30/next_car_distance;
-    if(target_speed < 0) target_speed = 0;
     fprintf(stderr, "next_car_distance = %f, target_speed = %f\n", next_car_distance,  target_speed);
     }
   else
