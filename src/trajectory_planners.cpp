@@ -39,15 +39,14 @@ MinPath minimizer_path(const array<double,3>& starting_state, const array<double
   typedef Eigen::Matrix<double, 6, 6> Matrix6d;
   static Eigen::FullPivLU<Matrix6d> change_lane_matrix = [] {
     Matrix6d tmp;
-    constexpr double gamma4= k*k*k*k;
     //start 
-    tmp.row(0) << 1, 0, 0, 0, 0,         1; //pos
-    tmp.row(1) << 0, 1, 0, 0, k,         0; //vel
-    tmp.row(2) << 0, 0, 1, 0, 0, -pow(k,2); //acc
+    tmp.row(0) << 1, 0, 0, 0, 0,    1; //pos
+    tmp.row(1) << 0, 1, 0, 0, k,    0; //vel
+    tmp.row(2) << 0, 0, 1, 0, 0, -k*k; //acc
     //end
-    tmp.row(3) << 1, 1, 1, 1,           sin(k),           cos(k); //pos
-    tmp.row(4) << 0, 1, 1, 1,         k*cos(k),        -k*sin(k); //vel
-    tmp.row(5) << 0, 0, 1, 1, -pow(k,2)*sin(k), -pow(k,2)*cos(k); //acc
+    tmp.row(3) << 1, 1, 1, 1,      sin(k),      cos(k); //pos
+    tmp.row(4) << 0, 1, 1, 1,    k*cos(k),   -k*sin(k); //vel
+    tmp.row(5) << 0, 0, 1, 1, -k*k*sin(k), -k*k*cos(k); //acc
     return tmp.fullPivLu();
   }();
 
