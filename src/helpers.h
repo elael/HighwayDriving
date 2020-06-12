@@ -10,6 +10,7 @@
 // for convenience
 using std::string;
 using std::vector;
+using Eigen::Vector2d;
 
 // Checks if the SocketIO event has JSON data.
 // If there is data the JSON object in string format will be returned,
@@ -104,35 +105,34 @@ inline FrenetFrame getFrenet(double x, double y, double theta,
     prev_wp  = maps_x.size()-1;
   }
 
-  double n_x = maps_x[next_wp]-maps_x[prev_wp];
-  double n_y = maps_y[next_wp]-maps_y[prev_wp];
-  double x_x = x - maps_x[prev_wp];
-  double x_y = y - maps_y[prev_wp];
+  Vector2d p_prev; p_prev << maps_x[prev_wp], maps_y[prev_wp];
+
+  Vector2d p_n; p_n << maps_x[next_wp], maps_y[next_wp];
+  Vector2d p_x; p_x << x, y;
+  p_n -= p_prev;
+  p_x -= p_prev;
 
   // find the projection of x onto n
-  double proj_norm = (x_x*n_x+x_y*n_y)/(n_x*n_x+n_y*n_y);
-  double proj_x = proj_norm*n_x;
-  double proj_y = proj_norm*n_y;
+  Vector2d proj = p_n * (p_x.dot(p_n) / p_n.dot(p_n));
 
-  double frenet_d = distance(x_x,x_y,proj_x,proj_y);
+  double frenet_d = (p_x - proj).norm();
 
   //see if d value is positive or negative by comparing it to a center point
-  double center_x = 1000-maps_x[prev_wp];
-  double center_y = 2000-maps_y[prev_wp];
-  double centerToPos = distance(center_x,center_y,x_x,x_y);
-  double centerToRef = distance(center_x,center_y,proj_x,proj_y);
+  static const Vector2d center_ref = [](){Vector2d temp; temp << 1000, 2000; return temp;}();
+  Vector2d center = center_ref - p_prev;
 
-  if (centerToPos <= centerToRef) {
-    frenet_d *= -1;
-  }
-
+  double centerToPos = (center - p_x).squaredNorm();
+  double centerToRef = (center - proj).squaredNorm();
+  
+  if (centerToPos <= centerToRef) frenet_d *= -1;
+  
   // calculate s value
   double frenet_s = 0;
   for (int i = 0; i < prev_wp; ++i) {
     frenet_s += distance(maps_x[i],maps_y[i],maps_x[i+1],maps_y[i+1]);
   }
 
-  frenet_s += distance(0,0,proj_x,proj_y);
+  frenet_s += proj.norm();
 
   return {frenet_s,frenet_d};
 }
@@ -141,7 +141,7 @@ struct XYFrame {
   double x, y;
 };
 // Transform from Frenet s,d coordinates to Cartesian x,y
-inline Eigen::Vector2d getXY(double s, double d, const vector<double> &maps_s, 
+inline Vector2d getXY(double s, double d, const vector<double> &maps_s, 
                      const vector<double> &maps_x, 
                      const vector<double> &maps_y) {
   int prev_wp = -1;
