@@ -12,6 +12,7 @@
  */
 using std::array;
 using std::vector;
+using Eigen::Vector2d;
 using Vector6d = Eigen::Matrix<double, 6, 1>;
 
 constexpr double kHalfLane = 2;
@@ -29,24 +30,25 @@ struct MinPath
 {
   Vector6d coefs;
   double operator()(const double& s){
-    return coefs[0] + s*(coefs[1] + s*(coefs[2] + s*coefs[3])) + coefs[4]*sin(k*s) + coefs[5]*cos(k*s);
+    return coefs[0] + s*(coefs[1] + s*(coefs[2] + s*(coefs[3] + s*(coefs[4] + s* coefs[5]))));
   }
 };
 
 
 
-MinPath minimizer_path(const array<double,3>& starting_state, const array<double,3>& ending_state){
+MinPath minimizer_path(const array<double,3>& starting_state, const array<double,3>& ending_state, double t){
   typedef Eigen::Matrix<double, 6, 6> Matrix6d;
-  static Eigen::FullPivLU<Matrix6d> change_lane_matrix = [] {
+  const auto change_lane_matrix = [=](){
     Matrix6d tmp;
     //start 
-    tmp.row(0) << 1, 0, 0, 0, 0,    1; //pos
-    tmp.row(1) << 0, 1, 0, 0, k,    0; //vel
-    tmp.row(2) << 0, 0, 1, 0, 0, -k*k; //acc
+    tmp.row(0) << 1, 0, 0, 0,   0,   0; //pos
+    tmp.row(1) << 0, 1, 0, 0,   0,  0; //vel
+    tmp.row(2) << 0, 0, 2, 0,  0, 0; //acc
     //end
-    tmp.row(3) << 1, 1, 1, 1,      sin(k),      cos(k); //pos
-    tmp.row(4) << 0, 1, 1, 1,    k*cos(k),   -k*sin(k); //vel
-    tmp.row(5) << 0, 0, 1, 1, -k*k*sin(k), -k*k*cos(k); //acc
+    double t2 = t*t, t3 = t2*t, t4 = t3*t;
+    tmp.row(3) << 1, t, t2, t3,  t4,    t4*t; //pos
+    tmp.row(4) << 0, 1, 2*t, 3*t2,   4*t3,  5*t4; //vel
+    tmp.row(5) << 0, 0, 2, 6*t, 12*t2, 20*t3; //acc
     return tmp.fullPivLu();
   }();
 
