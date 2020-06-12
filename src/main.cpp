@@ -7,6 +7,7 @@
 #include "Eigen/Core"
 #include "Eigen/QR"
 #include "helpers.h"
+#include "map.h"
 #include "json.hpp"
 #include "trajectory_planners.h"
 
@@ -41,11 +42,10 @@ int main() {
     iss >> s;
     iss >> d_x;
     iss >> d_y;
-    planner.map_x.emplace_back(x);
-    planner.map_y.emplace_back(y);
-    planner.map_s.emplace_back(s);
-    planner.map_dx.emplace_back(d_x);
-    planner.map_dy.emplace_back(d_y);
+    planner.map.map_xy.emplace_back(x,y);
+    planner.map.maps_s.emplace_back(s);
+    planner.map.maps_dx.emplace_back(d_x);
+    planner.map.maps_dy.emplace_back(d_y);
   }
 
   h.onMessage([&planner]

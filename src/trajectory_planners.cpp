@@ -1,5 +1,6 @@
 #include "trajectory_planners.h"
 #include "helpers.h"
+#include "map.h"
 #include <limits>
 #include <cmath>
 #include <tuple>
@@ -83,14 +84,15 @@ void TrajectoryPlanners::goto_lane(const Car& car, array<vector<double>,2>& prev
   {
     theta = deg2rad(car.yaw);
     v_ = 1;
-    const auto initial = smooth_getXY(car.s + v_ * kUpdatePeriod, car.d, map_s, map_x, map_y);
-    const auto initial2 = smooth_getXY(car.s + 2 * v_ * kUpdatePeriod, car.d, map_s, map_x, map_y);
-    const auto initial3 = smooth_getXY(car.s + 3 * v_ * kUpdatePeriod, car.d, map_s, map_x, map_y);
+    const auto initial = map.smooth_getXY(car.s + v_ * kUpdatePeriod, car.d);
+    const auto initial2 = map.smooth_getXY(car.s + 2 * v_ * kUpdatePeriod, car.d);
+    const auto initial3 = map.smooth_getXY(car.s + 3 * v_ * kUpdatePeriod, car.d);
     previous_path[0] = {initial[0], initial2[0], initial3[0]};
     previous_path[1] = {initial[1], initial2[1], initial3[1]};    
   }
+  Vector2d initial(previous_path[0].back(), previous_path[1].back());
 
-  FrenetFrame p0 = getFrenet(previous_path[0].back(), previous_path[1].back(), theta, map_x, map_y);
+  const auto [last_s, last_d] = map.getFrenet(initial, theta);
 
 
   // Calculate distante to the next car
@@ -98,27 +100,23 @@ void TrajectoryPlanners::goto_lane(const Car& car, array<vector<double>,2>& prev
   const std::vector<double>* closest_car_pt;
   for(const auto& other_car: other_cars){
     // predict constant speed for other cars
-    const auto [other_s, other_d] = getFrenet(other_car[1] + current_time*other_car[3], other_car[2] + current_time*other_car[4], theta, 
-                         map_x, 
-                         map_y);
-    if (double distance = (other_s - p0.s);
-        0 < distance && distance < next_car_distance && fabs(other_d-lane_center) < kHalfLane ){ // in front
+    const auto [other_s, other_d] = map.getFrenet(Vector2d(other_car[1],other_car[2])  + current_time*Vector2d(other_car[3], other_car[4]), theta);
+    if (double distance = (other_s - last_s);
+        -10 < distance && fabs(distance) < next_car_distance && fabs(other_d-lane_center) < 1.5*kHalfLane ){ // in front
           next_car_distance = distance;
           closest_car_pt = &other_car;
         }
   }
 
-  Vector2d initial; initial << previous_path[0].back(), previous_path[1].back();
   Vector2d behind_initial; behind_initial << *(previous_path[0].rbegin()+1), *(previous_path[1].rbegin()+1);
   Vector2d behind2_initial; behind2_initial << *(previous_path[0].rbegin()+2), *(previous_path[1].rbegin()+2);
   Vector2d v_initial = v_ * (initial-behind_initial).normalized();
   Vector2d v_behind_initial = v_ * (behind_initial-behind2_initial).normalized();
   Vector2d a_initial = (v_initial - v_behind_initial)/kUpdatePeriod/2;
 
-  const auto [last_s, last_d] = getFrenet(previous_path[0].back(), previous_path[1].back(), theta, map_x, map_y);
   double final_ds = v_ * (1 + fabs(lane_center-last_d)/4.0);//kMaxVel * final_dt;
-  const Vector2d ahead = smooth_getXY(last_s + final_ds + 0.1, lane_center, map_s, map_x, map_y);
-  const Vector2d final = smooth_getXY(last_s + final_ds, lane_center, map_s, map_x, map_y);
+  const Vector2d ahead = map.smooth_getXY(last_s + final_ds + 0.1, lane_center);
+  const Vector2d final = map.smooth_getXY(last_s + final_ds, lane_center);
   
   Vector2d v_final = v_ * (ahead-final).normalized();
   
