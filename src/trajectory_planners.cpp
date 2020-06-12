@@ -108,24 +108,21 @@ void TrajectoryPlanners::goto_lane(const Car& car, array<vector<double>,2>& prev
 
   constexpr double final_ds = 12;
 
-  Eigen::Vector2d initial; initial << previous_path[0].back(), previous_path[1].back();
-  Eigen::Vector2d behind_initial; behind_initial << *(previous_path[0].rbegin()+1), *(previous_path[1].rbegin()+1);
-  Eigen::Vector2d behind2_initial; behind2_initial << *(previous_path[0].rbegin()+2), *(previous_path[1].rbegin()+2);
-  auto v_initial = (initial-behind_initial).normalized();
-  auto v_behind_initial = (behind2_initial-initial).normalized();
-  auto a_initial = (v_initial - v_behind_initial)/kUpdatePeriod;
+  Vector2d initial; initial << previous_path[0].back(), previous_path[1].back();
+  Vector2d behind_initial; behind_initial << *(previous_path[0].rbegin()+1), *(previous_path[1].rbegin()+1);
+  Vector2d behind2_initial; behind2_initial << *(previous_path[0].rbegin()+2), *(previous_path[1].rbegin()+2);
+  Vector2d v_initial = kMaxVel * (initial-behind_initial).normalized();
+  Vector2d v_behind_initial = kMaxVel * (behind_initial-behind2_initial).normalized();
+  Vector2d a_initial = (v_initial - v_behind_initial)/kUpdatePeriod;
 
   const auto [last_s, last_d] = getFrenet(previous_path[0].back(), previous_path[1].back(), theta, map_x, map_y);
-  const auto behind = getXY(last_s + final_ds - 0.01, lane_center, map_s, map_x, map_y);
-  const auto final = getXY(last_s + final_ds, lane_center, map_s, map_x, map_y);
-  const auto ahead = getXY(last_s + final_ds + 0.01, lane_center, map_s, map_x, map_y);
-  auto v_behind = (final-behind).normalized();
-  auto v_ahead = (ahead-final).normalized();
-  auto v_final = (ahead-behind).normalized();
-  auto a_final = (v_ahead - v_behind)/0.01;
+  const Vector2d final = getXY(last_s + final_ds, lane_center, map_s, map_x, map_y);
+  const Vector2d ahead = getXY(last_s + final_ds + 0.01, lane_center, map_s, map_x, map_y);
   
-  MinPath px = minimizer_path({initial[0], v_initial[0], a_initial[0]},{final[0], v_final[0],  a_final[0]});
-  MinPath py = minimizer_path({initial[1], v_initial[1], a_initial[1]},{final[1], v_final[1],  a_final[1]});
+  Vector2d v_final = kMaxVel * (ahead-final).normalized();
+  
+  MinPath px = minimizer_path({initial[0], v_initial[0], a_initial[0]},{final[0], v_final[0],  0}, final_ds/kMaxVel);
+  MinPath py = minimizer_path({initial[1], v_initial[1], a_initial[1]},{final[1], v_final[1],  0}, final_ds/kMaxVel);
 
   // fprintf(stderr, "py = {%f,%f,%f,%f,%f,%f}\n", py.coefs[0],py.coefs[1],py.coefs[2],py.coefs[3],py.coefs[4],py.coefs[5]);
   
