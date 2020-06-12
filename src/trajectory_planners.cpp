@@ -74,20 +74,21 @@ void TrajectoryPlanners::goto_lane(const Car& car, array<vector<double>,2>& prev
 
   // Select two last positions on FrenetFrame
   double theta;
-  FrenetFrame p0;
   if(previous_path[0].size()>=3){
     theta = std::atan2(previous_path[1].back() - *(previous_path[1].rbegin()+1),previous_path[0].back() - *(previous_path[0].rbegin()+1));
-    p0 = getFrenet(previous_path[0].back(), previous_path[1].back(), theta, map_x, map_y);
   }
   else
   {
     theta = deg2rad(car.yaw);
-    p0 = {car.s, car.d};
-    const auto initial = getXY(car.s - 0.001, car.d, map_s, map_x, map_y);
-    const auto initial2 = getXY(car.s - 0.002, car.d, map_s, map_x, map_y);
-    previous_path[0] = {initial2[0], initial[0], car.x};
-    previous_path[1] = {initial2[1], initial[1], car.y};
+    v_ = 2;
+    const auto initial = getXY(car.s + v_ * kUpdatePeriod, car.d, map_s, map_x, map_y);
+    const auto initial2 = getXY(car.s + 2 * v_ * kUpdatePeriod, car.d, map_s, map_x, map_y);
+    const auto initial3 = getXY(car.s + 3 * v_ * kUpdatePeriod, car.d, map_s, map_x, map_y);
+    previous_path[0] = {initial[0], initial2[0], initial3[0]};
+    previous_path[1] = {initial[1], initial2[1], initial3[1]};    
   }
+
+  FrenetFrame p0 = getFrenet(previous_path[0].back(), previous_path[1].back(), theta, map_x, map_y);
 
 
   // Calculate distante to the next car
