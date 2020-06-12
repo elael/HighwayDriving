@@ -82,10 +82,10 @@ void TrajectoryPlanners::goto_lane(const Car& car, array<vector<double>,2>& prev
   else
   {
     theta = deg2rad(car.yaw);
-    v_ = 2;
-    const auto initial = getXY(car.s + v_ * kUpdatePeriod, car.d, map_s, map_x, map_y);
-    const auto initial2 = getXY(car.s + 2 * v_ * kUpdatePeriod, car.d, map_s, map_x, map_y);
-    const auto initial3 = getXY(car.s + 3 * v_ * kUpdatePeriod, car.d, map_s, map_x, map_y);
+    v_ = 1;
+    const auto initial = smooth_getXY(car.s + v_ * kUpdatePeriod, car.d, map_s, map_x, map_y);
+    const auto initial2 = smooth_getXY(car.s + 2 * v_ * kUpdatePeriod, car.d, map_s, map_x, map_y);
+    const auto initial3 = smooth_getXY(car.s + 3 * v_ * kUpdatePeriod, car.d, map_s, map_x, map_y);
     previous_path[0] = {initial[0], initial2[0], initial3[0]};
     previous_path[1] = {initial[1], initial2[1], initial3[1]};    
   }
@@ -108,23 +108,22 @@ void TrajectoryPlanners::goto_lane(const Car& car, array<vector<double>,2>& prev
         }
   }
 
-  constexpr double final_ds = 12;
-
   Vector2d initial; initial << previous_path[0].back(), previous_path[1].back();
   Vector2d behind_initial; behind_initial << *(previous_path[0].rbegin()+1), *(previous_path[1].rbegin()+1);
   Vector2d behind2_initial; behind2_initial << *(previous_path[0].rbegin()+2), *(previous_path[1].rbegin()+2);
-  Vector2d v_initial = kMaxVel * (initial-behind_initial).normalized();
-  Vector2d v_behind_initial = kMaxVel * (behind_initial-behind2_initial).normalized();
-  Vector2d a_initial = (v_initial - v_behind_initial)/kUpdatePeriod;
+  Vector2d v_initial = v_ * (initial-behind_initial).normalized();
+  Vector2d v_behind_initial = v_ * (behind_initial-behind2_initial).normalized();
+  Vector2d a_initial = (v_initial - v_behind_initial)/kUpdatePeriod/2;
 
   const auto [last_s, last_d] = getFrenet(previous_path[0].back(), previous_path[1].back(), theta, map_x, map_y);
-  const Vector2d final = getXY(last_s + final_ds, lane_center, map_s, map_x, map_y);
-  const Vector2d ahead = getXY(last_s + final_ds + 0.01, lane_center, map_s, map_x, map_y);
+  double final_ds = v_ * (1 + fabs(lane_center-last_d)/4.0);//kMaxVel * final_dt;
+  const Vector2d ahead = smooth_getXY(last_s + final_ds + 0.1, lane_center, map_s, map_x, map_y);
+  const Vector2d final = smooth_getXY(last_s + final_ds, lane_center, map_s, map_x, map_y);
   
-  Vector2d v_final = kMaxVel * (ahead-final).normalized();
+  Vector2d v_final = v_ * (ahead-final).normalized();
   
-  MinPath px = minimizer_path({initial[0], v_initial[0], a_initial[0]},{final[0], v_final[0],  0}, final_ds/kMaxVel);
-  MinPath py = minimizer_path({initial[1], v_initial[1], a_initial[1]},{final[1], v_final[1],  0}, final_ds/kMaxVel);
+  MinPath px = minimizer_path({initial[0], v_initial[0], a_initial[0]},{final[0], v_final[0],  0}, final_ds/v_);
+  MinPath py = minimizer_path({initial[1], v_initial[1], a_initial[1]},{final[1], v_final[1],  0}, final_ds/v_);
 
   // fprintf(stderr, "py = {%f,%f,%f,%f,%f,%f}\n", py.coefs[0],py.coefs[1],py.coefs[2],py.coefs[3],py.coefs[4],py.coefs[5]);
   
@@ -135,7 +134,11 @@ void TrajectoryPlanners::goto_lane(const Car& car, array<vector<double>,2>& prev
   // If no car in front, use max jerk
   double target_speed;
   if(next_car_distance < 30){
-    lane_center = (static_cast<int>(lane_center)+4)%12;
+    if (lane_center == 2) lane_center = 6;
+    else if (lane_center == 6 && car.d < 6) lane_center = 10;
+    else if (lane_center == 6 && car.d > 6) lane_center = 2;
+    else if (lane_center == 10) lane_center = 6;
+    
     target_speed = sqrt((*closest_car_pt)[3]*(*closest_car_pt)[3] + (*closest_car_pt)[4]*(*closest_car_pt)[4]);
     target_speed /= 30/next_car_distance;
     fprintf(stderr, "next_car_distance = %f, target_speed = %f\n", next_car_distance,  target_speed);
@@ -148,6 +151,8 @@ void TrajectoryPlanners::goto_lane(const Car& car, array<vector<double>,2>& prev
     double sq_target_distance = kUpdatePeriod * (v_ + kUpdatePeriod/2 * (a_ + kUpdatePeriod/3* j_));
     sq_target_distance *= sq_target_distance;
     while (sq_distance(x,y,px(n),py(n)) < sq_target_distance) n += 1.0/10000;
+    if (n > final_ds/v_) return;
+    
     
     x = px(n);
     y = py(n);

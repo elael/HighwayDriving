@@ -170,4 +170,12 @@ inline Vector2d getXY(double s, double d, const vector<double> &maps_s,
   return xy;
 }
 
+
+inline Vector2d smooth_getXY(double s, double d, const vector<double> &maps_s, 
+                     const vector<double> &maps_x, 
+                     const vector<double> &maps_y){
+  static const double smoother_s = 10;
+  return (getXY(s + smoother_s, d, maps_s, maps_x, maps_y) + getXY(s - smoother_s, d, maps_s, maps_x, maps_y))/2;
+}
+
 #endif  // HELPERS_H
