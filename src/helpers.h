@@ -49,4 +49,9 @@ inline double angle(const Vector2d& xy){
   return atan2(xy[1],xy[0]);
 }
 
+// counter clockwise perpendicular vector
+inline Vector2d ccPerp(const Vector2d& original){
+    Vector2d perp; perp << -original[1], original[0];
+    return perp;
+}
 #endif  // HELPERS_H

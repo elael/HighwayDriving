@@ -24,7 +24,7 @@ constexpr double kTimeFrame = kNsamples * kUpdatePeriod;
 constexpr double kMaxJerk = 10; // coefficients
 constexpr double kMaxAcc = 10;
 constexpr double k = 1;
-constexpr double kMaxVel = 20;
+constexpr double kMaxVel = 22;
 constexpr double k1 = -kMaxJerk/kMaxAcc, k2 = -k1*k1/4;
 
 struct MinPath
@@ -46,7 +46,9 @@ MinPath minimizer_path(const array<double,3>& starting_state, const array<double
     tmp.row(1) << 0, 1, 0, 0,   0,  0; //vel
     tmp.row(2) << 0, 0, 2, 0,  0, 0; //acc
     //end
-    double t2 = t*t, t3 = t2*t, t4 = t3*t;
+    double t2 = t*t;
+    double t3 = t2*t;
+    double t4 = t3*t;
     tmp.row(3) << 1, t, t2, t3,  t4,    t4*t; //pos
     tmp.row(4) << 0, 1, 2*t, 3*t2,   4*t3,  5*t4; //vel
     tmp.row(5) << 0, 0, 2, 6*t, 12*t2, 20*t3; //acc
@@ -92,11 +94,11 @@ void TrajectoryPlanners::goto_lane(const Car& car, array<vector<double>,2>& prev
   }
   Vector2d initial(previous_path[0].back(), previous_path[1].back());
 
-  const auto [last_s, last_d] = map.getFrenet(initial, theta);
+  const auto [last_s, d_initial] = map.getFrenet(initial, theta);
 
 
   // Calculate distante to the next car
-  double next_car_distance = 60;
+  double next_car_distance = 30;
   const std::vector<double>* closest_car_pt;
   for(const auto& other_car: other_cars){
     // predict constant speed for other cars
@@ -110,18 +112,25 @@ void TrajectoryPlanners::goto_lane(const Car& car, array<vector<double>,2>& prev
 
   Vector2d behind_initial; behind_initial << *(previous_path[0].rbegin()+1), *(previous_path[1].rbegin()+1);
   Vector2d behind2_initial; behind2_initial << *(previous_path[0].rbegin()+2), *(previous_path[1].rbegin()+2);
-  Vector2d v_initial = v_ * (initial-behind_initial).normalized();
-  Vector2d v_behind_initial = v_ * (behind_initial-behind2_initial).normalized();
-  Vector2d a_initial = (v_initial - v_behind_initial)/kUpdatePeriod/2;
+  Vector2d v_initial = (initial-behind_initial)/kUpdatePeriod;
+  Vector2d v_behind_initial = (behind_initial-behind2_initial)/kUpdatePeriod;
+  Vector2d a_initial = (v_initial - v_behind_initial)/kUpdatePeriod;
+  // double d_behind_initial = map.getFrenet(behind_initial,theta).d;
+  // double d_behind2_initial = map.getFrenet(behind2_initial,theta).d;
+  // double dd_initial = (d_initial - d_behind_initial)/kUpdatePeriod;
+  // double dd_behind_initial = (d_initial - d_behind_initial)/kUpdatePeriod;
+  // double ddd_initial = (dd_initial - dd_behind_initial)/kUpdatePeriod;
 
-  double final_ds = v_ * (1 + fabs(lane_center-last_d)/4.0);//kMaxVel * final_dt;
+  double final_ds = v_ * (1 + fabs(lane_center - d_initial)/4.0);
   const Vector2d ahead = map.smooth_getXY(last_s + final_ds + 0.1, lane_center);
   const Vector2d final = map.smooth_getXY(last_s + final_ds, lane_center);
   
   Vector2d v_final = v_ * (ahead-final).normalized();
   
+  // v_initial = kMaxVel*v_initial;
   MinPath px = minimizer_path({initial[0], v_initial[0], a_initial[0]},{final[0], v_final[0],  0}, final_ds/v_);
   MinPath py = minimizer_path({initial[1], v_initial[1], a_initial[1]},{final[1], v_final[1],  0}, final_ds/v_);
+  // MinPath pd = minimizer_path({d_initial, dd_initial, ddd_initial},{lane_center, 0,  0}, final_ds/v_);
 
   // fprintf(stderr, "py = {%f,%f,%f,%f,%f,%f}\n", py.coefs[0],py.coefs[1],py.coefs[2],py.coefs[3],py.coefs[4],py.coefs[5]);
   
@@ -143,19 +152,25 @@ void TrajectoryPlanners::goto_lane(const Car& car, array<vector<double>,2>& prev
     }
   else
     target_speed = kMaxVel;
-  
 
+  Vector2d& xy = initial;
+  double s = last_s;
   for (double t = kUpdatePeriod,  n = 0; t < time_frame; t += kUpdatePeriod) {
     double sq_target_distance = kUpdatePeriod * (v_ + kUpdatePeriod/2 * (a_ + kUpdatePeriod/3* j_));
-    sq_target_distance *= sq_target_distance;
-    while (sq_distance(x,y,px(n),py(n)) < sq_target_distance) n += 1.0/10000;
-    if (n > final_ds/v_) return;
+    // sq_target_distance *= sq_target_distance;
+    // s += kUpdatePeriod * (v_ + kUpdatePeriod/2 * (a_ + kUpdatePeriod/3* j_));
+
+    // while ((xy - map.smooth_getXY(last_s + n, 6)).squaredNorm() < sq_target_distance) n += 1.0/1000;
+    // if (n > final_ds/v_) return;
+    xy = map.getXY(last_s + 20 * t, 6);
     
+    // const auto [s, d] = getFrenet(x, y, theta, map_x, map_y);
+    fprintf(stderr, "At %f: px=%f, py=%f, s=%f, d=%f\n", n, xy[0], xy[1], s, 6.0);
     
-    x = px(n);
-    y = py(n);
-    previous_path[0].emplace_back(x);
-    previous_path[1].emplace_back(y);
+    // x = px(n);
+    // y = py(n);
+    previous_path[0].emplace_back(xy[0]);
+    previous_path[1].emplace_back(xy[1]);
 
     j_ = k1*a_ + k2*(v_ - target_speed);
     v_ += kUpdatePeriod * (a_ + kUpdatePeriod/2 * j_ );

@@ -1,12 +1,13 @@
 #include <vector>
 #include "Eigen/Dense"
+#include "Eigen/Geometry"
 #include "map.h"
 #include "helpers.h"
 
 using Eigen::Vector2d;
 
 // Calculate closest waypoint to current x, y position
-int Map::ClosestWaypoint(const Vector2d& xy) {
+int Map::ClosestWaypoint(const Vector2d& xy) const {
   double closestLen = std::numeric_limits<double>::infinity(); //large number
   int closestWaypoint = 0;
 
@@ -22,7 +23,7 @@ int Map::ClosestWaypoint(const Vector2d& xy) {
 }
 
 // Returns next waypoint of the closest waypoint
-int Map::NextWaypoint(const Vector2d& xy, double theta) {
+int Map::NextWaypoint(const Vector2d& xy, double theta) const {
   int closestWaypoint = ClosestWaypoint(xy);
 
   double heading = angle(map_xy[closestWaypoint] - xy);
@@ -37,7 +38,7 @@ int Map::NextWaypoint(const Vector2d& xy, double theta) {
 }
 
 // Transform from Cartesian x,y coordinates to Frenet s,d coordinates
-FrenetFrame Map::getFrenet(const Vector2d& xy, double theta) {
+FrenetFrame Map::getFrenet(const Vector2d& xy, double theta) const {
   int next_wp = NextWaypoint(xy, theta);
 
   int prev_wp;
@@ -66,18 +67,13 @@ FrenetFrame Map::getFrenet(const Vector2d& xy, double theta) {
   if (centerToPos <= centerToRef) frenet_d *= -1;
   
   // calculate s value
-  double frenet_s = 0;
-  for (int i = 0; i < prev_wp; ++i) {
-    frenet_s += (map_xy[i] - map_xy[i+1]).norm();
-  }
-
-  frenet_s += proj.norm();
+  double frenet_s = maps_s[prev_wp] + proj.norm();
 
   return {frenet_s,frenet_d};
 }
 
 // Transform from Frenet s,d coordinates to Cartesian x,y
-Vector2d Map::getXY(double s, double d) {
+Vector2d Map::getXY(double s, double d) const {
 
   int prev_wp = -1;
 
@@ -87,13 +83,82 @@ Vector2d Map::getXY(double s, double d) {
 
   int wp2 = (prev_wp+1)%map_xy.size();
 
-  double heading = angle(map_xy[wp2]-map_xy[prev_wp]);
-  // the x,y,s along the segment
-  double seg_s = (s-maps_s[prev_wp]);
+  double ds = (maps_s[wp2]-maps_s[prev_wp]);
 
-  Vector2d seg = map_xy[prev_wp] + seg_s*Vector2d{cos(heading), sin(heading)};
+  Vector2d ending = map_xy[wp2] + d*map_dxdy[wp2];
+  double ending_weight = (s-maps_s[prev_wp])/ds;
 
-  double perp_heading = heading-pi()/2;
+  Vector2d begining = map_xy[prev_wp] + d*map_dxdy[prev_wp];
+  double begining_weight = (maps_s[wp2] - s)/ds;
 
-  return seg + d*Vector2d{cos(perp_heading), sin(perp_heading)};
+  return begining_weight*begining + ending_weight*ending;
+}
+
+// Transform from Frenet s,d coordinates to Cartesian x,y
+Vector2d Map::smooth_getXY(double s, double d) const {
+
+  int prev_wp = -1;
+
+  s = fmod(s, maps_s.back() + (map_xy.back() - map_xy.front()).norm()); 
+
+  while (s > maps_s[prev_wp+1] && (prev_wp < (int)(maps_s.size()-1))) 
+    ++prev_wp;
+
+  int wp2 = (prev_wp+1)%map_xy.size();
+
+  double ds = (maps_s[wp2]-maps_s[prev_wp]);
+
+  Vector2d ending = map_xy[wp2] + d*map_dxdy[wp2];
+  double ending_weight = (s-maps_s[prev_wp])/ds;
+
+  Vector2d begining = map_xy[prev_wp] + d*map_dxdy[prev_wp];
+  double begining_weight = (maps_s[wp2] - s)/ds;
+
+  return begining_weight*begining + ending_weight*ending;
+}
+
+// Vector2d Map::smooth_getXY(double s, double d) const {
+
+//   int prev_wp = -1;
+
+//   while (s > maps_s[prev_wp+1] && (prev_wp < (int)(maps_s.size()-1))) 
+//     ++prev_wp;
+  
+//   int wp2 = (prev_wp+1)%map_xy.size();
+
+//   Vector2d heading = (map_xy[wp2]-map_xy[prev_wp]).normalized();
+//   double seg_s = (s-maps_s[prev_wp]);
+//   Vector2d s_vector = seg_s*heading;
+
+//   int wp;
+//   double mean_point = (maps_s[wp2]-maps_s[prev_wp])/2;
+//   Vector2d mean_vector = mean_point * heading;
+//   if(s < (maps_s[wp2]+maps_s[prev_wp])/2)
+//     wp = (prev_wp-1+map_xy.size())%map_xy.size();
+//   else{
+//     wp = (wp2+1)%map_xy.size();
+//     Vector2d endpoint = (map_xy[wp]-map_xy[wp2])/2 - mean_vector;
+//     double t = endpoint.dot(heading);
+//     Vector2d perp; perp << -heading[1], heading[0];
+//     double y; // TO BE CONTINUED
+//   }
+  
+//   return map_xy[prev_wp] + seg_s*heading + d*map_dxdy[prev_wp];
+// }
+
+void Map::smoothMap(){
+  std::vector<double> s, sxx,syy;
+  for(size_t i=0; i < maps_s.size(); ++i){
+    s.emplace_back(maps_s[i]);
+    sxx.emplace_back(map_xy[i][0]);
+    syy.emplace_back(map_xy[i][1]);
+  } 
+
+  Vector2d tg = ccPerp(map_dxdy[0]);
+
+  sx.set_boundary(tk::spline::first_deriv, tg[0], tk::spline::first_deriv, tg[0]);
+  sx.set_points(s,std::move(sxx));
+
+  sy.set_boundary(tk::spline::first_deriv, tg[1], tk::spline::first_deriv, tg[1]);
+  sy.set_points(std::move(s),std::move(syy));
 }

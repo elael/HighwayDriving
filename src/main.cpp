@@ -44,9 +44,9 @@ int main() {
     iss >> d_y;
     planner.map.map_xy.emplace_back(x,y);
     planner.map.maps_s.emplace_back(s);
-    planner.map.maps_dx.emplace_back(d_x);
-    planner.map.maps_dy.emplace_back(d_y);
+    planner.map.map_dxdy.emplace_back(d_x,d_y);
   }
+  planner.map.smoothMap();
 
   h.onMessage([&planner]
               (uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
@@ -86,11 +86,6 @@ int main() {
           //   of the road.
           vector<vector<double>> sensor_fusion = j[1]["sensor_fusion"];
 
-          json msgJson;
-
-          vector<double> next_x_vals;
-          vector<double> next_y_vals;
-
           /**
            * TODO: define a path made up of (x,y) points that the car will visit
            *   sequentially every .02 seconds
@@ -103,6 +98,7 @@ int main() {
           planner.goto_lane(main_car, previous_path, sensor_fusion);
 
 
+          json msgJson;
           msgJson["next_x"] = std::move(previous_path[0]);
           msgJson["next_y"] = std::move(previous_path[1]);
 
