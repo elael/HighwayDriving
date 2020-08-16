@@ -16,22 +16,20 @@ using std::vector;
 using Eigen::Vector2d;
 using Vector6d = Eigen::Matrix<double, 6, 1>;
 
-constexpr double kHalfLane = 2;
-constexpr double kUpdatePeriod = 0.02;
-constexpr uint kNsamples = 50;
-constexpr double kTimeFrame = kNsamples * kUpdatePeriod;
-
-constexpr double kMaxJerk = 10; // coefficients
-constexpr double kMaxAcc = 10;
-constexpr double k = 1;
-constexpr double kMaxVel = 22;
-constexpr double k1 = -kMaxJerk/kMaxAcc, k2 = -k1*k1/4;
-
 struct MinPath
 {
   Vector6d coefs;
-  double operator()(const double& s){
-    return coefs[0] + s*(coefs[1] + s*(coefs[2] + s*(coefs[3] + s*(coefs[4] + s* coefs[5]))));
+  double operator()(double t) const{
+    return coefs[0] + t*(coefs[1] + t*(coefs[2] + t*(coefs[3] + t*(coefs[4] + t* coefs[5]))));
+  }
+  double speed(double t) const{
+    return coefs[1] + t*(2*coefs[2] + t*(3*coefs[3] + t*(4*coefs[4] + t*5*coefs[5])));
+  }
+  double acc(double t) const{
+    return 2*coefs[2] + t*(2*3*coefs[3] + t*(3*4*coefs[4] + t*4*5*coefs[5]));
+  }
+  double jerk(double t) const{
+    return 2*3*coefs[3] + t*(2*3*4*coefs[4] + t*3*4*5*coefs[5]);
   }
 };
 
@@ -71,111 +69,83 @@ MinPath minimizer_path(const array<double,3>& starting_state, const array<double
  * [6] = d 
  */
 
+inline uint lane2ind(double lane){
+  lane = lane > 0? lane : 0;
+  lane = lane < 12? lane : 8;
+  return static_cast<uint>(lane) / 4; 
+}
+
 void TrajectoryPlanners::goto_lane(const Car& car, array<vector<double>,2>& previous_path, const vector<vector<double>>& other_cars)
 {
+  double theta = deg2rad(car.yaw);
+
+  if(previous_path[0].size() == 0){
+    fwd.position = map.getFrenet(Vector2d(car.x, car.y), theta).s;
+  }
   const double current_time = kUpdatePeriod * previous_path[0].size();
   const double time_frame = kTimeFrame - current_time;
-  if (time_frame <= 0) return;
+  if (time_frame <= kUpdatePeriod) return;
 
-  // Select two last positions on FrenetFrame
-  double theta;
-  if(previous_path[0].size()>=3){
-    theta = std::atan2(previous_path[1].back() - *(previous_path[1].rbegin()+1),previous_path[0].back() - *(previous_path[0].rbegin()+1));
-  }
-  else
-  {
-    theta = deg2rad(car.yaw);
-    v_ = 1;
-    const auto initial = map.smooth_getXY(car.s + v_ * kUpdatePeriod, car.d);
-    const auto initial2 = map.smooth_getXY(car.s + 2 * v_ * kUpdatePeriod, car.d);
-    const auto initial3 = map.smooth_getXY(car.s + 3 * v_ * kUpdatePeriod, car.d);
-    previous_path[0] = {initial[0], initial2[0], initial3[0]};
-    previous_path[1] = {initial[1], initial2[1], initial3[1]};    
-  }
-  Vector2d initial(previous_path[0].back(), previous_path[1].back());
 
-  const auto [last_s, d_initial] = map.getFrenet(initial, theta);
+  // // Select two last positions on FrenetFrame
+  // double speed = mph2ms(car.speed);
+  // Vector2d velocity = speed * unitVector(theta);
+  // Vector2d initial(car.x, car.y);
 
 
   // Calculate distante to the next car
   double next_car_distance = 30;
+  array<double, 3> lane_speed = {std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity()};
   const std::vector<double>* closest_car_pt;
   for(const auto& other_car: other_cars){
     // predict constant speed for other cars
     const auto [other_s, other_d] = map.getFrenet(Vector2d(other_car[1],other_car[2])  + current_time*Vector2d(other_car[3], other_car[4]), theta);
-    if (double distance = (other_s - last_s);
-        -10 < distance && fabs(distance) < next_car_distance && fabs(other_d-lane_center) < 1.5*kHalfLane ){ // in front
+    if (double distance = (other_s - fwd.position);
+        -10 < distance && distance < next_car_distance && fabs(other_d-lane_center) < 1.2*kHalfLane ){ // in front
           next_car_distance = distance;
           closest_car_pt = &other_car;
         }
   }
 
-  Vector2d behind_initial; behind_initial << *(previous_path[0].rbegin()+1), *(previous_path[1].rbegin()+1);
-  Vector2d behind2_initial; behind2_initial << *(previous_path[0].rbegin()+2), *(previous_path[1].rbegin()+2);
-  Vector2d v_initial = (initial-behind_initial)/kUpdatePeriod;
-  Vector2d v_behind_initial = (behind_initial-behind2_initial)/kUpdatePeriod;
-  Vector2d a_initial = (v_initial - v_behind_initial)/kUpdatePeriod;
-  // double d_behind_initial = map.getFrenet(behind_initial,theta).d;
-  // double d_behind2_initial = map.getFrenet(behind2_initial,theta).d;
-  // double dd_initial = (d_initial - d_behind_initial)/kUpdatePeriod;
-  // double dd_behind_initial = (d_initial - d_behind_initial)/kUpdatePeriod;
-  // double ddd_initial = (dd_initial - dd_behind_initial)/kUpdatePeriod;
-
-  double final_ds = v_ * (1 + fabs(lane_center - d_initial)/4.0);
-  const Vector2d ahead = map.smooth_getXY(last_s + final_ds + 0.1, lane_center);
-  const Vector2d final = map.smooth_getXY(last_s + final_ds, lane_center);
+  double final_dt = 3*fwd.velocity; //2*fabs(lane_center - d_initial_)/fwd.velocity;
   
-  Vector2d v_final = v_ * (ahead-final).normalized();
-  
-  // v_initial = kMaxVel*v_initial;
-  MinPath px = minimizer_path({initial[0], v_initial[0], a_initial[0]},{final[0], v_final[0],  0}, final_ds/v_);
-  MinPath py = minimizer_path({initial[1], v_initial[1], a_initial[1]},{final[1], v_final[1],  0}, final_ds/v_);
-  // MinPath pd = minimizer_path({d_initial, dd_initial, ddd_initial},{lane_center, 0,  0}, final_ds/v_);
-
-  // fprintf(stderr, "py = {%f,%f,%f,%f,%f,%f}\n", py.coefs[0],py.coefs[1],py.coefs[2],py.coefs[3],py.coefs[4],py.coefs[5]);
-  
-  double x = px(0);
-  double y = py(0);
+  MinPath pd = minimizer_path({d_initial_, dd_initial_, ddd_initial_},{lane_center, 0,  0}, final_dt);
 
 
   // If no car in front, use max jerk
-  double target_speed;
   if(next_car_distance < 30){
     if (lane_center == 2) lane_center = 6;
     else if (lane_center == 6 && car.d < 6) lane_center = 10;
     else if (lane_center == 6 && car.d > 6) lane_center = 2;
     else if (lane_center == 10) lane_center = 6;
     
-    target_speed = sqrt((*closest_car_pt)[3]*(*closest_car_pt)[3] + (*closest_car_pt)[4]*(*closest_car_pt)[4]);
-    target_speed /= 30/next_car_distance;
-    fprintf(stderr, "next_car_distance = %f, target_speed = %f\n", next_car_distance,  target_speed);
+    double other_speed = Vector2d((*closest_car_pt)[3], (*closest_car_pt)[4]).norm();
+    fwd.target_speed = other_speed;
+    fwd.target_speed /= 30/next_car_distance;
+    fprintf(stderr, "next_car_distance = %f, other_speed = %f, target_speed = %f\n", next_car_distance, other_speed, fwd.target_speed);
     }
   else
-    target_speed = kMaxVel;
+    fwd.target_speed = kMaxVel;
 
-  Vector2d& xy = initial;
-  double s = last_s;
-  for (double t = kUpdatePeriod,  n = 0; t < time_frame; t += kUpdatePeriod) {
-    double sq_target_distance = kUpdatePeriod * (v_ + kUpdatePeriod/2 * (a_ + kUpdatePeriod/3* j_));
-    // sq_target_distance *= sq_target_distance;
-    // s += kUpdatePeriod * (v_ + kUpdatePeriod/2 * (a_ + kUpdatePeriod/3* j_));
+  double t;
+  const double initial_s = fwd.position;
+  for (t = kUpdatePeriod; t < time_frame; t += kUpdatePeriod) {
+    fwd.step(kUpdatePeriod);
+    double s = fwd.position - initial_s;
 
-    // while ((xy - map.smooth_getXY(last_s + n, 6)).squaredNorm() < sq_target_distance) n += 1.0/1000;
-    // if (n > final_ds/v_) return;
-    xy = map.getXY(last_s + 20 * t, 6);
+    Vector2d xy = map.smooth_getXY(fwd.position, pd(s));//6+4*sin(2*M_PI/50*s));
     
-    // const auto [s, d] = getFrenet(x, y, theta, map_x, map_y);
-    fprintf(stderr, "At %f: px=%f, py=%f, s=%f, d=%f\n", n, xy[0], xy[1], s, 6.0);
+    fprintf(stderr, "At %f: s=%f, d=%f, velocity=%f, accelaration=%f, jerk=%f\n", 
+    t, fwd.position, pd(s), fwd.velocity, fwd.accelaration, fwd.jerk);
     
-    // x = px(n);
-    // y = py(n);
     previous_path[0].emplace_back(xy[0]);
     previous_path[1].emplace_back(xy[1]);
-
-    j_ = k1*a_ + k2*(v_ - target_speed);
-    v_ += kUpdatePeriod * (a_ + kUpdatePeriod/2 * j_ );
-    a_ += kUpdatePeriod * j_;
   }
+  t -= kUpdatePeriod;
+  double s = fwd.position - initial_s;
 
+  fprintf(stderr, "pd(t)=%f, pd.speed(t)=%f, pd.acc(t)=%f\n\n", pd(s), pd.speed(s), pd.acc(s));
+  d_initial_ = pd(s);
+  dd_initial_ = pd.speed(s);
+  ddd_initial_ = pd.acc(s);
 }
-

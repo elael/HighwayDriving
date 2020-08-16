@@ -14,8 +14,10 @@ struct Map
   std::vector<Eigen::Vector2d, Eigen::aligned_allocator<Eigen::Vector2d>> map_xy;
   std::vector<Eigen::Vector2d, Eigen::aligned_allocator<Eigen::Vector2d>> map_dxdy;
   std::vector<double> maps_s;
-  tk::spline sx;
-  tk::spline sy;
+  tk::spline inner_sx;
+  tk::spline inner_sy;
+  tk::spline outer_sx;
+  tk::spline outer_sy;
   static constexpr double smoother_s = 20;
 
   void smoothMap();
@@ -34,4 +36,6 @@ private:
 
   // Returns next waypoint of the closest waypoint
   int NextWaypoint(const Eigen::Vector2d &xy, double theta) const;
+
+  double road_length_;
 };

@@ -97,24 +97,12 @@ Vector2d Map::getXY(double s, double d) const {
 // Transform from Frenet s,d coordinates to Cartesian x,y
 Vector2d Map::smooth_getXY(double s, double d) const {
 
-  int prev_wp = -1;
+  s = fmod(s, road_length_); 
 
-  s = fmod(s, maps_s.back() + (map_xy.back() - map_xy.front()).norm()); 
+  Vector2d inner_pos(inner_sx(s), inner_sy(s));
+  Vector2d outer_pos(outer_sx(s), outer_sy(s));
 
-  while (s > maps_s[prev_wp+1] && (prev_wp < (int)(maps_s.size()-1))) 
-    ++prev_wp;
-
-  int wp2 = (prev_wp+1)%map_xy.size();
-
-  double ds = (maps_s[wp2]-maps_s[prev_wp]);
-
-  Vector2d ending = map_xy[wp2] + d*map_dxdy[wp2];
-  double ending_weight = (s-maps_s[prev_wp])/ds;
-
-  Vector2d begining = map_xy[prev_wp] + d*map_dxdy[prev_wp];
-  double begining_weight = (maps_s[wp2] - s)/ds;
-
-  return begining_weight*begining + ending_weight*ending;
+  return inner_pos + d*(outer_pos - inner_pos); //begining_weight*begining + ending_weight*ending;
 }
 
 // Vector2d Map::smooth_getXY(double s, double d) const {
@@ -147,18 +135,29 @@ Vector2d Map::smooth_getXY(double s, double d) const {
 // }
 
 void Map::smoothMap(){
-  std::vector<double> s, sxx,syy;
+  std::vector<double> s, inner_sxx,inner_syy,outer_sxx,outer_syy;
   for(size_t i=0; i < maps_s.size(); ++i){
     s.emplace_back(maps_s[i]);
-    sxx.emplace_back(map_xy[i][0]);
-    syy.emplace_back(map_xy[i][1]);
+    inner_sxx.emplace_back(map_xy[i][0]);
+    inner_syy.emplace_back(map_xy[i][1]);
+    Vector2d outer_xy = map_xy[i] + map_dxdy[i];
+    outer_sxx.emplace_back(outer_xy[0]);
+    outer_syy.emplace_back(outer_xy[1]);
   } 
 
   Vector2d tg = ccPerp(map_dxdy[0]);
 
-  sx.set_boundary(tk::spline::first_deriv, tg[0], tk::spline::first_deriv, tg[0]);
-  sx.set_points(s,std::move(sxx));
+  inner_sx.set_boundary(tk::spline::first_deriv, tg[0], tk::spline::first_deriv, tg[0]);
+  inner_sx.set_points(s,std::move(inner_sxx));
 
-  sy.set_boundary(tk::spline::first_deriv, tg[1], tk::spline::first_deriv, tg[1]);
-  sy.set_points(std::move(s),std::move(syy));
+  inner_sy.set_boundary(tk::spline::first_deriv, tg[1], tk::spline::first_deriv, tg[1]);
+  inner_sy.set_points(s,std::move(inner_syy));
+
+  outer_sx.set_boundary(tk::spline::first_deriv, tg[0], tk::spline::first_deriv, tg[0]);
+  outer_sx.set_points(s,std::move(outer_sxx));
+
+  outer_sy.set_boundary(tk::spline::first_deriv, tg[1], tk::spline::first_deriv, tg[1]);
+  outer_sy.set_points(std::move(s),std::move(outer_syy));
+
+  road_length_ = maps_s.back() + (map_xy.back() - map_xy.front()).norm();
 }

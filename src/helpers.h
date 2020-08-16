@@ -32,8 +32,9 @@ static string hasData(string s) {
 
 // For converting back and forth between radians and degrees.
 constexpr double pi() { return M_PI; }
-constexpr double deg2rad(const double& x) { return x * pi() / 180; }
-constexpr double rad2deg(const double& x) { return x * 180 / pi(); }
+constexpr double deg2rad(double x) { return x * pi() / 180; }
+constexpr double rad2deg(double x) { return x * 180 / pi(); }
+constexpr double mph2ms(double x) { return x * 0.44704; }
 
 // Calculate distance between two points
 constexpr double distance(const double& x1, const double& y1, const double& x2, const double& y2) {
@@ -47,6 +48,10 @@ constexpr double sq_distance(const double& x1, const double& y1, const double& x
 
 inline double angle(const Vector2d& xy){
   return atan2(xy[1],xy[0]);
+}
+
+inline Vector2d unitVector(double theta){
+  return Vector2d(cos(theta),sin(theta));
 }
 
 // counter clockwise perpendicular vector
