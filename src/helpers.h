@@ -2,13 +2,15 @@
 #define HELPERS_H
 
 #include <math.h>
+
 #include <string>
 #include <vector>
+
 #include "Eigen/Dense"
 
 // for convenience
-using std::string;
 using Eigen::Vector2d;
+using std::string;
 
 // Checks if the SocketIO event has JSON data.
 // If there is data the JSON object in string format will be returned,
@@ -38,25 +40,26 @@ constexpr double mph2ms(double x) { return x * 0.44704; }
 
 // Calculate distance between two points
 constexpr double distance(const double& x1, const double& y1, const double& x2, const double& y2) {
-  return sqrt((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1));
+  return sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
 }
 
 // Calculate distance between two points
 constexpr double sq_distance(const double& x1, const double& y1, const double& x2, const double& y2) {
-  return (x2-x1)*(x2-x1)+(y2-y1)*(y2-y1);
+  return (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
 }
 
-inline double angle(const Vector2d& xy){
-  return atan2(xy[1],xy[0]);
+inline double angle(const Vector2d& xy) {
+  return atan2(xy[1], xy[0]);
 }
 
-inline Vector2d unitVector(double theta){
-  return Vector2d(cos(theta),sin(theta));
+inline Vector2d unitVector(double theta) {
+  return Vector2d(cos(theta), sin(theta));
 }
 
 // counter clockwise perpendicular vector
-inline Vector2d ccPerp(const Vector2d& original){
-    Vector2d perp; perp << -original[1], original[0];
-    return perp;
+inline Vector2d ccPerp(const Vector2d& original) {
+  Vector2d perp;
+  perp << -original[1], original[0];
+  return perp;
 }
 #endif  // HELPERS_H

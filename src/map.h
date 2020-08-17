@@ -1,16 +1,15 @@
 #pragma once
 #include <vector>
+
 #include "Eigen/Dense"
 #include "Eigen/StdVector"
 #include "spline.h"
 
-struct FrenetFrame
-{
+struct FrenetFrame {
   double s, d;
 };
 
-struct Map
-{
+struct Map {
   std::vector<Eigen::Vector2d, Eigen::aligned_allocator<Eigen::Vector2d>> map_xy;
   std::vector<Eigen::Vector2d, Eigen::aligned_allocator<Eigen::Vector2d>> map_dxdy;
   std::vector<double> maps_s;
@@ -30,7 +29,7 @@ struct Map
 
   Eigen::Vector2d smooth_getXY(double s, double d) const;
 
-private:
+ private:
   // Calculate closest waypoint to current x, y position
   int ClosestWaypoint(const Eigen::Vector2d &xy) const;
 

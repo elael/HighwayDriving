@@ -1,14 +1,16 @@
 #include <uWS/uWS.h>
+
+#include <array>
 #include <fstream>
 #include <iostream>
 #include <string>
 #include <vector>
-#include <array>
+
 #include "Eigen/Core"
 #include "Eigen/QR"
 #include "helpers.h"
-#include "map.h"
 #include "json.hpp"
+#include "map.h"
 #include "trajectory_planners.h"
 
 // for convenience
@@ -42,47 +44,44 @@ int main() {
     iss >> s;
     iss >> d_x;
     iss >> d_y;
-    planner.map.map_xy.emplace_back(x,y);
+    planner.map.map_xy.emplace_back(x, y);
     planner.map.maps_s.emplace_back(s);
-    planner.map.map_dxdy.emplace_back(d_x,d_y);
+    planner.map.map_dxdy.emplace_back(d_x, d_y);
   }
   planner.map.smoothMap();
 
-  h.onMessage([&planner]
-              (uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
-               uWS::OpCode opCode) {
+  h.onMessage([&planner](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+                         uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
     if (length && length > 2 && data[0] == '4' && data[1] == '2') {
-
       auto s = hasData(data);
 
       if (s != "") {
         auto j = json::parse(s);
-        
+
         string event = j[0].get<string>();
-        
+
         if (event == "telemetry") {
           // j[1] is the data JSON object
-          
+
           // Main car's localization Data
           Car main_car{
-            j[1]["x"],
-            j[1]["y"],
-            j[1]["s"],
-            j[1]["d"],
-            deg2rad(j[1]["yaw"]),
-            mph2ms(j[1]["speed"])            
-          };
+              j[1]["x"],
+              j[1]["y"],
+              j[1]["s"],
+              j[1]["d"],
+              deg2rad(j[1]["yaw"]),
+              mph2ms(j[1]["speed"])};
 
           // Previous path data given to the Planner
-          std::array<vector<double>,2> previous_path = {j[1]["previous_path_x"], j[1]["previous_path_y"]};
+          std::array<vector<double>, 2> previous_path = {j[1]["previous_path_x"], j[1]["previous_path_y"]};
 
-          // Previous path's end s and d values 
-          std::array<double,2> end_path_frenet = { j[1]["end_path_s"], j[1]["end_path_d"]};
+          // Previous path's end s and d values
+          std::array<double, 2> end_path_frenet = {j[1]["end_path_s"], j[1]["end_path_d"]};
 
-          // Sensor Fusion Data, a list of all other cars on the same side 
+          // Sensor Fusion Data, a list of all other cars on the same side
           //   of the road.
           vector<vector<double>> sensor_fusion = j[1]["sensor_fusion"];
 
@@ -97,12 +96,11 @@ int main() {
           // }
           planner.select_state(main_car, previous_path, sensor_fusion);
 
-
           json msgJson;
           msgJson["next_x"] = std::move(previous_path[0]);
           msgJson["next_y"] = std::move(previous_path[1]);
 
-          auto msg = "42[\"control\","+ msgJson.dump()+"]";
+          auto msg = "42[\"control\"," + msgJson.dump() + "]";
 
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
         }  // end "telemetry" if
@@ -112,7 +110,7 @@ int main() {
         ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
       }
     }  // end websocket if
-  }); // end h.onMessage
+  });  // end h.onMessage
 
   h.onConnection([&h](uWS::WebSocket<uWS::SERVER> ws, uWS::HttpRequest req) {
     std::cout << "Connected!!!" << std::endl;
@@ -131,6 +129,6 @@ int main() {
     std::cerr << "Failed to listen to port" << std::endl;
     return -1;
   }
-  
+
   h.run();
 }
