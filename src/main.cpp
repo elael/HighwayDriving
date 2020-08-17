@@ -72,8 +72,8 @@ int main() {
             j[1]["y"],
             j[1]["s"],
             j[1]["d"],
-            j[1]["yaw"],
-            j[1]["speed"]            
+            deg2rad(j[1]["yaw"]),
+            mph2ms(j[1]["speed"])            
           };
 
           // Previous path data given to the Planner
@@ -95,7 +95,7 @@ int main() {
           //   next_x_vals.emplace_back(main_car.x+(dist_inc*i)*cos(deg2rad(main_car.yaw)));
           //   next_y_vals.emplace_back(main_car.y+(dist_inc*i)*sin(deg2rad(main_car.yaw)));
           // }
-          planner.goto_lane(main_car, previous_path, sensor_fusion);
+          planner.select_state(main_car, previous_path, sensor_fusion);
 
 
           json msgJson;
