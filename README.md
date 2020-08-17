@@ -113,6 +113,8 @@ All the necessary steps for path planning are included in the **TrajectoryPlanne
 ### Behaviour planning
 A simple but effective switch-case state machine is implemented on the select_state method. It uses the following rationale, one should always change to an adjacent line if it is faster and has enough clearance, forward speed should enable the tracking of the car in front when present and be the top speed otherwise.
 
+![Switch to fastest lane](gifs/switch_fastest_lane.gif)
+
 ### Trajectory Generation
 The forward movement is treated as a control problem where the setpoint is given by the behaviour layer. The linear control parameters were selected in a way to guarantee fast, but subcritical convergence and keep jerk and acceleration within bounds.
 
@@ -120,3 +122,5 @@ The lateral movement is an L2 jerk-minimizing quintic polynomial to the centre o
 
 ### Trajectory Selection
 The final trajectory selected based on a cost function that balances: lateral jerk, centerline distance, centerline alignment, wobbling and safety. The final result is a trajectory that is not only comfortable and safe but intrinsically fast.
+
+![Wait for clearence](gifs/wait_for_clearence.gif)
