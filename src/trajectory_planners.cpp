@@ -72,10 +72,10 @@ double TrajectoryPlanners::get_cost(const Car &car, double target_lane, const ve
       return std::numeric_limits<double>::infinity();
   }
 
-  double cost = 20 * fabs(max_d_jerk) / kMaxJerk;  //lateral jerk
+  double cost = 10 * fabs(max_d_jerk) / kMaxJerk;  //lateral jerk
 
-  cost += 5 * exp((target_lane - candidate(dt)) * (target_lane - candidate(dt)));  // center line distance cost
-  cost += 5 * exp(candidate.speed(dt) * candidate.speed(dt));                      // center line alignment cost
+  cost += 10 * exp((target_lane - candidate(dt)) * (target_lane - candidate(dt)));  // center line distance cost
+  cost += 10 * exp(candidate.speed(dt) * candidate.speed(dt));                      // center line alignment cost
   cost += 10 * exp(candidate.acc(dt) * candidate.acc(dt));                         // wobbling cost
 
   double min_dist = std::numeric_limits<double>::infinity();
@@ -118,12 +118,14 @@ void TrajectoryPlanners::goto_lane(const Car &car, double target_lane, xy_path &
   const double initial_dt = 1.5;
   const double final_dt = dt_samples * dt_step + initial_dt;
 
+  // Lateral movement computation
   vector<MinPath> candidates;
   candidates.reserve(dt_samples);
   for (double dt = initial_dt; dt < final_dt; dt += dt_step) {
     candidates.emplace_back(minimizer_path({lat.pos, lat.vel, lat.acc}, {target_lane, 0, 0}, dt));
   }
 
+  // Forward movement computation
   vector<double> s_path;
   s_path.reserve(kNsamples - previous_path[0].size());
   for (size_t n = previous_path[0].size(); n < kNsamples; ++n) {
@@ -131,8 +133,10 @@ void TrajectoryPlanners::goto_lane(const Car &car, double target_lane, xy_path &
     s_path.emplace_back(fwd.state.pos);
   }
 
+  // Compound movement selection
   const MinPath &final_path = select_candidate(car, target_lane, s_path, std::move(candidates), current_time, other_cars);
 
+  // Update path with new steps
   double t;
   size_t n;
   for (t = kUpdatePeriod, n = 0; n < s_path.size(); t += kUpdatePeriod, ++n) {
@@ -142,6 +146,7 @@ void TrajectoryPlanners::goto_lane(const Car &car, double target_lane, xy_path &
   }
   t -= kUpdatePeriod;
 
+  // Update selected lateral movement
   lat = {final_path(t), final_path.speed(t), final_path.acc(t), final_path.jerk(t)};
 }
 
@@ -157,6 +162,7 @@ void TrajectoryPlanners::select_state(const Car &car, xy_path &previous_path, co
   const double current_time = kUpdatePeriod * previous_path[0].size();
   const double time_frame = kTimeFrame - current_time;
 
+  // Lanes speed and distance computation for all lanes
   array lane_speed = {target_vel, target_vel, target_vel};
   array lane_position = {std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity()};
   for (const auto &other_car : other_cars) {
@@ -172,15 +178,12 @@ void TrajectoryPlanners::select_state(const Car &car, xy_path &previous_path, co
       }
   }
 
-  if (lane_speed[ergo_lane] >= lane_speed[(ergo_lane + 1) % 3] && lane_speed[ergo_lane] >= lane_speed[(ergo_lane + 2) % 3]) {
-    double ds = lane_position[ergo_lane] - fwd.state.pos;
-    ds = ds > 0 ? ds : 0;
-    fwd.target_speed = lane_speed[ergo_lane] * (1 - std::exp(-ds / 30));
-    return goto_lane(car, 2 + 4.0 * ergo_lane, previous_path, other_cars);
-  }
-
   uint target_lane;
-  switch (ergo_lane) {
+  // Keep lane if it is the fastest
+  if (lane_speed[ergo_lane] >= lane_speed[(ergo_lane + 1) % 3] && lane_speed[ergo_lane] >= lane_speed[(ergo_lane + 2) % 3])
+    target_lane = ergo_lane;
+  // "State Machine" for lane selection
+  else switch (ergo_lane) {
     case 0:
       target_lane = lane_position[1] > t_tolerance * fwd.state.vel + fwd.state.pos ? 1 : 0;
       break;
@@ -191,13 +194,6 @@ void TrajectoryPlanners::select_state(const Car &car, xy_path &previous_path, co
     case 2:
       target_lane = lane_position[1] > t_tolerance * fwd.state.vel + fwd.state.pos ? 1 : 2;
       break;
-  }
-
-  if (target_lane == ergo_lane) {
-    double ds = lane_position[ergo_lane] - fwd.state.pos;
-    ds = ds > 0 ? ds : 0;
-    fwd.target_speed = lane_speed[ergo_lane] * (1 - std::exp(-ds / 30));
-    return goto_lane(car, 2 + 4.0 * target_lane, previous_path, other_cars);
   }
 
   ergo_lane = target_lane;

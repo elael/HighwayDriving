@@ -115,6 +115,34 @@ A simple but effective switch-case state machine is implemented on the select_st
 
 ![Switch to fastest lane](gifs/switch_fastest_lane.gif)
 
+The two steps of the state machine are as follows:
+```C++
+  uint target_lane;
+  // Keep lane if it is the fastest
+  if (lane_speed[ergo_lane] >= lane_speed[(ergo_lane + 1) % 3] && lane_speed[ergo_lane] >= lane_speed[(ergo_lane + 2) % 3])
+    target_lane = ergo_lane;
+  // "State Machine" for lane selection
+  else switch (ergo_lane) {
+    case 0:
+      target_lane = lane_position[1] > t_tolerance * fwd.state.vel + fwd.state.pos ? 1 : 0;
+      break;
+    case 1:
+      target_lane = lane_speed[2] > lane_speed[0] ? 2 : 0;
+      target_lane = lane_position[target_lane] > t_tolerance * fwd.state.vel + fwd.state.pos ? target_lane : 1;
+      break;
+    case 2:
+      target_lane = lane_position[1] > t_tolerance * fwd.state.vel + fwd.state.pos ? 1 : 2;
+      break;
+  }
+```
+
+The speed selection decays it exponentially as the car gets closer to another vehicle:
+```C++
+  double ds = lane_position[target_lane] - fwd.state.pos;
+  ds = ds > 0 ? ds : 0;
+  fwd.target_speed = lane_speed[target_lane] * (1 - std::exp(-ds / 30));
+```
+
 ### Trajectory Generation
 The forward movement is treated as a control problem where the setpoint is given by the behaviour layer. The linear control parameters were selected in a way to guarantee fast, but subcritical convergence and keep jerk and acceleration within bounds.
 
